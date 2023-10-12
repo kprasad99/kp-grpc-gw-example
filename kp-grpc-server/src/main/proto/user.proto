@@ -1,0 +1,28 @@
+
+syntax = "proto3";
+
+package io.github.kprasad99.grpc.example;
+
+import "google/protobuf/empty.proto";
+
+option java_multiple_files = true;
+option java_package = "io.github.kprasad99.grpc.example.service";
+option go_package = "github.com/kprasad99/kp-grpc-example/service";
+
+message User {
+    int32  id = 1;
+    string name = 2;
+    int32 age = 3;
+}
+
+message UserIDInput {
+  int32  id = 1;
+}
+
+service UserService {
+  rpc list (google.protobuf.Empty) returns (stream io.github.kprasad99.grpc.example.User) {}
+  rpc add (io.github.kprasad99.grpc.example.User) returns (io.github.kprasad99.grpc.example.User) {}
+  rpc update (io.github.kprasad99.grpc.example.User) returns (google.protobuf.Empty) {}
+  rpc remove (UserIDInput) returns (google.protobuf.Empty) {}
+}
+

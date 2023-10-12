@@ -1,0 +1,77 @@
+services:
+  traefik:
+    image: "traefik:v3.0"
+    command:
+      #  - "--log.level=DEBUG"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      #  - "--tracing.zipkin=true"
+      #  - "--tracing.zipkin.httpEndpoint=http://zipkin:9411/api/v2/spans"
+      - "--tracing.openTelemetry.insecure=true"
+      - "--tracing.serviceName=traefik"
+      - "--tracing.openTelemetry=true"
+      - "--tracing.openTelemetry.address=otel-collector:4317"
+      - "--tracing.openTelemetry.grpc=true"
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - k-network
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+  zipkin:
+    image: 'openzipkin/zipkin:latest'
+    ports:
+      - 9411:9411
+    networks:
+      - k-network
+  otel-collector:
+    #image: otel/opentelemetry-collector-contrib:0.86.0
+    image: otel/opentelemetry-collector:0.86.0
+    volumes:
+    #  - ./config/otel-collector/config.yaml:/etc/otelcol-contrib/config.yaml
+      - ./config/otel-collector/config.yaml:/etc/otelcol/config.yaml
+    ports:
+#      - 1888:1888 # pprof extension
+#      - 8888:8888 # Prometheus metrics exposed by the collector
+#      - 8889:8889 # Prometheus exporter metrics
+#      - 13133:13133 # health_check extension
+#       OTLP gRPC receiver
+       - 4317:4317
+#       OTLP http receiver
+       - 4318:4318
+#      - 55679:55679 # zpages extension
+    networks:
+      - k-network
+  kp-grpc-server:
+    image: kprasad99/kp-grpc-server:0.0.1
+    build:
+      context: ./kp-grpc-server
+      dockerfile: Dockerfile
+    environment:
+      management.otlp.tracing.endpoint: http://otel-collector:4318/v1/traces
+      otel.instrumentation.hibernate.experimental-span-attributes: true
+    networks:
+      - k-network
+  kp-grpc-gw:
+    image: kprasad99/kp-grpc-gw:0.0.1
+    build:
+      context: ./kp-grpc-gw
+      dockerfile: Dockerfile
+    labels:
+      - "traefik.enable=true"
+      # - "traefik.http.services.kp-grpc-gw-example.loadbalancer.server.scheme=h2c"
+      - "traefik.http.services.kp-grpc-gw-example.loadbalancer.server.port=8080"
+      - "traefik.http.routers.kp-grpc-gw-example.rule=PathPrefix(`/kp-grpc-gw-example/api`)"
+      - "traefik.http.routers.web-router.rule=Host(`kp-dev.local`)"
+    environment:
+      BACKEND_URL: kp-grpc-server:6565
+      OTEL_ADDRESS: "otel-collector:4317"
+      WEB_CONTEXT_PATH: "/kp-grpc-gw-example"
+    networks:
+      - k-network
+networks:
+  k-network:
